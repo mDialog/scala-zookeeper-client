@@ -1,47 +1,36 @@
-package com.twitter.zookeeper
+package com.mdialog.zookeeper
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.immutable.Set
-import org.apache.zookeeper.{CreateMode, KeeperException, Watcher, WatchedEvent, ZooKeeper}
-import org.apache.zookeeper.data.{ACL, Stat, Id}
+import org.apache.zookeeper.{ CreateMode, KeeperException, Watcher, WatchedEvent, ZooKeeper }
+import org.apache.zookeeper.data.{ ACL, Stat, Id }
 import org.apache.zookeeper.ZooDefs.Ids
 import org.apache.zookeeper.Watcher.Event.EventType
 import org.apache.zookeeper.Watcher.Event.KeeperState
-import com.twitter.logging.Logger
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import org.slf4j.{ Logger, LoggerFactory }
+import java.util.concurrent.{ CountDownLatch, TimeUnit }
 import java.util.concurrent.atomic.AtomicBoolean
 
-class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath : String,
-                      watcher: Option[ZooKeeperClient => Unit]) {
-  private val log = Logger.get
-  @volatile private var zk : ZooKeeper = null
+class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
+    watcher: Option[ZooKeeperClient ⇒ Unit]) {
+  private val log = LoggerFactory.getLogger(this.getClass)
+  @volatile private var zk: ZooKeeper = null
   connect()
 
-  def this(servers: String, sessionTimeout: Int, basePath : String) =
+  def this(servers: String, sessionTimeout: Int, basePath: String) =
     this(servers, sessionTimeout, basePath, None)
 
-  def this(servers: String, sessionTimeout: Int, basePath : String, watcher: ZooKeeperClient => Unit) =
+  def this(servers: String, sessionTimeout: Int, basePath: String, watcher: ZooKeeperClient ⇒ Unit) =
     this(servers, sessionTimeout, basePath, Some(watcher))
 
   def this(servers: String) =
     this(servers, 3000, "", None)
 
-  def this(servers: String, watcher: ZooKeeperClient => Unit) =
+  def this(servers: String, watcher: ZooKeeperClient ⇒ Unit) =
     this(servers, 3000, "", Some(watcher))
 
-  def this(config: ZookeeperClientConfig, watcher: Option[ZooKeeperClient => Unit]) = {
-    this(config.hostList,
-         config.sessionTimeout,
-         config.basePath,
-         watcher)
-  }
-
-  def this(config: ZookeeperClientConfig) ={
-    this(config, None)
-  }
-
-  def getHandle() : ZooKeeper = zk
+  def getHandle(): ZooKeeper = zk
 
   /**
    * connect() attaches to the remote zookeeper and sets an instance variable.
@@ -54,32 +43,34 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath : String,
       zk = null
     }
     zk = new ZooKeeper(servers, sessionTimeout,
-                       new Watcher { def process(event : WatchedEvent) {
-                         sessionEvent(assignLatch, connectionLatch, event)
-                       }})
+      new Watcher {
+        def process(event: WatchedEvent) {
+          sessionEvent(assignLatch, connectionLatch, event)
+        }
+      })
     assignLatch.countDown()
-    log.info("Attempting to connect to zookeeper servers %s", servers)
+    log.info("Attempting to connect to zookeeper servers {}", servers)
     connectionLatch.await()
   }
 
-  def sessionEvent(assignLatch: CountDownLatch, connectionLatch : CountDownLatch, event : WatchedEvent) {
-    log.info("Zookeeper event: %s".format(event))
+  def sessionEvent(assignLatch: CountDownLatch, connectionLatch: CountDownLatch, event: WatchedEvent) {
+    log.info("Zookeeper event: {}", event)
     assignLatch.await()
     event.getState match {
-      case KeeperState.SyncConnected => {
+      case KeeperState.SyncConnected ⇒ {
         try {
-          watcher.map(fn => fn(this))
+          watcher.map(fn ⇒ fn(this))
         } catch {
-          case e:Exception =>
-            log.error(e, "Exception during zookeeper connection established callback")
+          case e: Exception ⇒
+            log.error("Exception during zookeeper connection established callback", e)
         }
         connectionLatch.countDown()
       }
-      case KeeperState.Expired => {
+      case KeeperState.Expired ⇒ {
         // Session was expired; create a new zookeeper connection
         connect()
       }
-      case _ => // Disconnected -- zookeeper library will handle reconnects
+      case _ ⇒ // Disconnected -- zookeeper library will handle reconnects
     }
   }
 
@@ -87,14 +78,15 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath : String,
    * Given a string representing a path, return each subpath
    * Ex. subPaths("/a/b/c", "/") == ["/a", "/a/b", "/a/b/c"]
    */
-  def subPaths(path : String, sep : Char) = {
+  def subPaths(path: String, sep: Char) = {
     val l = path.split(sep).toList
-    val paths = l.tail.foldLeft[List[String]](Nil){(xs, x) =>
-      (xs.headOption.getOrElse("") + sep.toString + x)::xs}
+    val paths = l.tail.foldLeft[List[String]](Nil) { (xs, x) ⇒
+      (xs.headOption.getOrElse("") + sep.toString + x) :: xs
+    }
     paths.reverse
   }
 
-  private def makeNodePath(path : String) = "%s/%s".format(basePath, path).replaceAll("//", "/")
+  private def makeNodePath(path: String) = "%s/%s".format(basePath, path).replaceAll("//", "/")
 
   def getChildren(path: String): Seq[String] = {
     zk.getChildren(makeNodePath(path), false)
@@ -116,12 +108,12 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath : String,
    * ZooKeeper version of mkdir -p
    */
   def createPath(path: String) {
-    for (path <- subPaths(makeNodePath(path), '/')) {
+    for (path ← subPaths(makeNodePath(path), '/')) {
       try {
-        log.debug("Creating path in createPath: %s", path)
+        log.debug("Creating path in createPath: {}", path)
         zk.create(path, null, Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
       } catch {
-        case _:KeeperException.NodeExistsException => {} // ignore existing nodes
+        case _: KeeperException.NodeExistsException ⇒ {} // ignore existing nodes
       }
     }
   }
@@ -141,9 +133,9 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath : String,
   /**
    * Delete a node along with all of its children
    */
-  def deleteRecursive(path : String) {
+  def deleteRecursive(path: String) {
     val children = getChildren(path)
-    for (node <- children) {
+    for (node ← children) {
       deleteRecursive(path + '/' + node)
     }
     delete(path)
@@ -154,15 +146,15 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath : String,
    * new data value as a byte array. If the node is deleted, onDataChanged will be called with
    * None and will track the node's re-creation with an existence watch.
    */
-  def watchNode(node : String, onDataChanged : Option[Array[Byte]] => Unit) {
-    log.debug("Watching node %s", node)
+  def watchNode(node: String, onDataChanged: Option[Array[Byte]] ⇒ Unit) {
+    log.debug("Watching node {}", node)
     val path = makeNodePath(node)
     def updateData {
       try {
         onDataChanged(Some(zk.getData(path, dataGetter, null)))
       } catch {
-        case e:KeeperException => {
-          log.warning("Failed to read node %s: %s", path, e)
+        case e: KeeperException ⇒ {
+          log.warn("Failed to read node {}: {}", path, e)
           deletedData
         }
       }
@@ -170,13 +162,18 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath : String,
 
     def deletedData {
       onDataChanged(None)
-      if (zk.exists(path, dataGetter) != null) {
-        // Node was re-created by the time we called zk.exist
-        updateData
+
+      try {
+        if (zk.exists(path, dataGetter) != null) {
+          // Node was re-created by the time we called zk.exist
+          updateData
+        }
+      } catch {
+        case e: KeeperException ⇒
       }
     }
     def dataGetter = new Watcher {
-      def process(event : WatchedEvent) {
+      def process(event: WatchedEvent) {
         if (event.getType == EventType.NodeDataChanged || event.getType == EventType.NodeCreated) {
           updateData
         } else if (event.getType == EventType.NodeDeleted) {
@@ -192,12 +189,12 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath : String,
    * for each NodeChildrenChanged event and runs the supplied updateChildren function and
    * re-watches the node's children.
    */
-  def watchChildren(node : String, updateChildren : Seq[String] => Unit) {
+  def watchChildren(node: String, updateChildren: Seq[String] ⇒ Unit) {
     val path = makeNodePath(node)
     val childWatcher = new Watcher {
-      def process(event : WatchedEvent) {
+      def process(event: WatchedEvent) {
         if (event.getType == EventType.NodeChildrenChanged ||
-            event.getType == EventType.NodeCreated) {
+          event.getType == EventType.NodeCreated) {
           watchChildren(node, updateChildren)
         }
       }
@@ -206,9 +203,9 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath : String,
       val children = zk.getChildren(path, childWatcher)
       updateChildren(children)
     } catch {
-      case e:KeeperException => {
+      case e: KeeperException ⇒ {
         // Node was deleted -- fire a watch on node re-creation
-        log.warning("Failed to read node %s: %s", path, e)
+        log.warn("Failed to read node {}: {}", path, e)
         updateChildren(List())
         zk.exists(path, childWatcher)
       }
@@ -219,7 +216,7 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath : String,
    * WARNING: watchMap must be thread-safe. Writing is synchronized on the watchMap. Readers MUST
    * also synchronize on the watchMap for safety.
    */
-  def watchChildrenWithData[T](node : String, watchMap: mutable.Map[String, T], deserialize: Array[Byte] => T) {
+  def watchChildrenWithData[T](node: String, watchMap: mutable.Map[String, T], deserialize: Array[Byte] ⇒ T) {
     watchChildrenWithData(node, watchMap, deserialize, None)
   }
 
@@ -227,45 +224,45 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath : String,
    * Watch a set of nodes with an explicit notifier. The notifier will be called whenever
    * the watchMap is modified
    */
-  def watchChildrenWithData[T](node : String, watchMap: mutable.Map[String, T],
-                               deserialize: Array[Byte] => T, notifier: String => Unit) {
+  def watchChildrenWithData[T](node: String, watchMap: mutable.Map[String, T],
+    deserialize: Array[Byte] ⇒ T, notifier: String ⇒ Unit) {
     watchChildrenWithData(node, watchMap, deserialize, Some(notifier))
   }
 
-  private def watchChildrenWithData[T](node : String, watchMap: mutable.Map[String, T],
-                                       deserialize: Array[Byte] => T, notifier: Option[String => Unit]) {
-    def nodeChanged(child : String)(childData : Option[Array[Byte]]) {
+  private def watchChildrenWithData[T](node: String, watchMap: mutable.Map[String, T],
+    deserialize: Array[Byte] ⇒ T, notifier: Option[String ⇒ Unit]) {
+    def nodeChanged(child: String)(childData: Option[Array[Byte]]) {
       childData match {
-        case Some(data) => {
+        case Some(data) ⇒ {
           watchMap.synchronized {
             watchMap(child) = deserialize(data)
           }
-          notifier.map(f => f(child))
+          notifier.map(f ⇒ f(child))
         }
-        case None => // deletion handled via parent watch
+        case None ⇒ // deletion handled via parent watch
       }
     }
 
-    def parentWatcher(children : Seq[String]) {
-      val childrenSet = Set(children : _*)
-      val watchedKeys = Set(watchMap.keySet.toSeq : _*)
+    def parentWatcher(children: Seq[String]) {
+      val childrenSet = Set(children: _*)
+      val watchedKeys = Set(watchMap.keySet.toSeq: _*)
       val removedChildren = watchedKeys -- childrenSet
       val addedChildren = childrenSet -- watchedKeys
       watchMap.synchronized {
         // remove deleted children from the watch map
-        for (child <- removedChildren) {
-          log.ifDebug {"Node %s: child %s removed".format(node, child)}
+        for (child ← removedChildren) {
+          log.debug("Node {}: child {} removed", node, child)
           watchMap -= child
         }
         // add new children to the watch map
-        for (child <- addedChildren) {
+        for (child ← addedChildren) {
           // node is added via nodeChanged callback
-          log.ifDebug {"Node %s: child %s added".format(node, child)}
+          log.debug("Node {}: child {} added", node, child)
           watchNode("%s/%s".format(node, child), nodeChanged(child))
         }
       }
-      for (child <- removedChildren) {
-        notifier.map(f => f(child))
+      for (child ← removedChildren) {
+        notifier.map(f ⇒ f(child))
       }
     }
 

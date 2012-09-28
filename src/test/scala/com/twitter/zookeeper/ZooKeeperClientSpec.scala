@@ -1,4 +1,4 @@
-package com.twitter.zookeeper
+package com.mdialog.zookeeper
 
 import java.net.{Socket, ConnectException}
 import org.apache.zookeeper.{CreateMode, Watcher, WatchedEvent, ZooKeeper}
