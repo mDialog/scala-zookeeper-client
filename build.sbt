@@ -2,7 +2,7 @@ name := "scala-zookeeper-client"
 
 organization := "com.mdialog"
 
-version := "3.1.1"
+version := "3.1.4"
 
 scalaVersion := "2.9.1"
 
@@ -15,7 +15,7 @@ libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.6.4",
   "org.slf4j" % "slf4j-log4j12" % "1.6.4",
   "log4j" % "log4j" % "1.2.16",
-  "org.apache.zookeeper" % "zookeeper" % "3.3.4" excludeAll(
+  "org.apache.zookeeper" % "zookeeper" % "3.3.6" excludeAll(
     ExclusionRule(name = "jms"),
     ExclusionRule(name = "jmxtools"),
     ExclusionRule(name = "jmxri")
