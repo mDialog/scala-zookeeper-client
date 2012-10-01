@@ -18,7 +18,7 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
   @volatile private var zk: ZooKeeper = null
   connect()
 
-  @volative private var disconnected = false
+  @volatile private var disconnected = false
 
   def this(servers: String, sessionTimeout: Int, basePath: String) =
     this(servers, sessionTimeout, basePath, None)
@@ -60,7 +60,7 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
     assignLatch.await()
     event.getState match {
       case KeeperState.SyncConnected ⇒ {
-	disconnected = false
+        disconnected = false
         try {
           watcher.map(fn ⇒ fn(this))
         } catch {
@@ -74,7 +74,7 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
         connect()
       }
       case _ ⇒ // Disconnected -- zookeeper library will handle reconnects
-	disconnected = true
+        disconnected = true
     }
   }
 
@@ -99,7 +99,7 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
   def close() = zk.close
 
   def isAlive: Boolean = {
-    if (disconnected) return false  // nonblocking isAlive
+    if (disconnected) return false // nonblocking isAlive
 
     // If you can get the root, then we're alive.
     val result: Stat = zk.exists("/", false) // do not watch
