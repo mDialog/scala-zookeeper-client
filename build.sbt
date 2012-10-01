@@ -2,7 +2,7 @@ name := "scala-zookeeper-client"
 
 organization := "com.mdialog"
 
-version := "3.1.4"
+version := "3.1.6"
 
 scalaVersion := "2.9.1"
 
