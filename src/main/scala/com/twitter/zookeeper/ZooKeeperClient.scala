@@ -157,6 +157,7 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
 
     log.debug("Watching node {}", node)
     val path = makeNodePath(node)
+
     def updateData(fromDeleted: Boolean = false) {
       try {
         val st = new org.apache.zookeeper.data.Stat()
@@ -167,11 +168,9 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
             zk.getData(path, false, st)
         }
 
-        println("! s-zk-c: onDataChanged for path " + node + " and stat " + st)
         onDataChanged(Some(dt))
       } catch {
         case e: KeeperException ⇒ {
-          println("! s-zk-c: there was exception (callback reproduction?): " + e)
           log.warn("Failed to read node {}: {}", path, e)
 
           if (!fromDeleted)
@@ -183,21 +182,27 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
     def deletedData {
       onDataChanged(None)
 
-      try {
-        if (zk.exists(path, dataGetter()) != null) {
-          // Node was re-created by the time we called zk.exist
-          updateData(true)
-        }
-      } catch {
-        case e: KeeperException ⇒
+      var st: org.apache.zookeeper.data.Stat = null
+      var addedWatch = false
+
+      /* retry until it is known a watch has been added */
+      while (!addedWatch) {
+	try {
+	  st = zk.exists(path, dataGetter())
+	  addedWatch = true
+	} catch {
+	  case e: KeeperException =>
+	    Thread.sleep(100)
+	} 
       }
+
+      if (st != null)
+	updateData(true) /* node is no longer deleted */
     }
 
     def dataGetter() = {
       new Watcher {
         def process(event: WatchedEvent) {
-          println("! s-zk-c: firing dataGetter for watchNode of path " + path + " invoked originally at " + TS)
-
           if (event.getType == EventType.NodeDataChanged || event.getType == EventType.NodeCreated) {
             updateData()
           } else if (event.getType == EventType.NodeDeleted) {
