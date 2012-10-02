@@ -153,8 +153,6 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
    * None and will track the node's re-creation with an existence watch.
    */
   def watchNode(node: String, onDataChanged: Option[Array[Byte]] ⇒ Unit) {
-    val TS = System.currentTimeMillis
-
     log.debug("Watching node {}", node)
     val path = makeNodePath(node)
 
@@ -187,17 +185,17 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
 
       /* retry until it is known a watch has been added */
       while (!addedWatch) {
-	try {
-	  st = zk.exists(path, dataGetter())
-	  addedWatch = true
-	} catch {
-	  case e: KeeperException =>
-	    Thread.sleep(100)
-	} 
+        try {
+          st = zk.exists(path, dataGetter())
+          addedWatch = true
+        } catch {
+          case e: KeeperException ⇒
+            Thread.sleep(100)
+        }
       }
 
       if (st != null)
-	updateData(true) /* node is no longer deleted */
+        updateData(true) /* node is no longer deleted */
     }
 
     def dataGetter() = {
