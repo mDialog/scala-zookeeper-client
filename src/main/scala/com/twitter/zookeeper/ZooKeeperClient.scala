@@ -153,15 +153,29 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
    * None and will track the node's re-creation with an existence watch.
    */
   def watchNode(node: String, onDataChanged: Option[Array[Byte]] ⇒ Unit) {
+    val TS = System.currentTimeMillis
+
     log.debug("Watching node {}", node)
     val path = makeNodePath(node)
-    def updateData {
+    def updateData(fromDeleted: Boolean = false) {
       try {
-        onDataChanged(Some(zk.getData(path, dataGetter, null)))
+        val st = new org.apache.zookeeper.data.Stat()
+        val dt = {
+          if (!fromDeleted)
+            zk.getData(path, dataGetter(), st)
+          else
+            zk.getData(path, false, st)
+        }
+
+        println("! s-zk-c: onDataChanged for path " + node + " and stat " + st)
+        onDataChanged(Some(dt))
       } catch {
         case e: KeeperException ⇒ {
+          println("! s-zk-c: there was exception (callback reproduction?): " + e)
           log.warn("Failed to read node {}: {}", path, e)
-          deletedData
+
+          if (!fromDeleted)
+            deletedData
         }
       }
     }
@@ -170,24 +184,30 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
       onDataChanged(None)
 
       try {
-        if (zk.exists(path, dataGetter) != null) {
+        if (zk.exists(path, dataGetter()) != null) {
           // Node was re-created by the time we called zk.exist
-          updateData
+          updateData(true)
         }
       } catch {
         case e: KeeperException ⇒
       }
     }
-    def dataGetter = new Watcher {
-      def process(event: WatchedEvent) {
-        if (event.getType == EventType.NodeDataChanged || event.getType == EventType.NodeCreated) {
-          updateData
-        } else if (event.getType == EventType.NodeDeleted) {
-          deletedData
+
+    def dataGetter() = {
+      new Watcher {
+        def process(event: WatchedEvent) {
+          println("! s-zk-c: firing dataGetter for watchNode of path " + path + " invoked originally at " + TS)
+
+          if (event.getType == EventType.NodeDataChanged || event.getType == EventType.NodeCreated) {
+            updateData()
+          } else if (event.getType == EventType.NodeDeleted) {
+            deletedData
+          }
         }
       }
     }
-    updateData
+
+    updateData()
   }
 
   /**
