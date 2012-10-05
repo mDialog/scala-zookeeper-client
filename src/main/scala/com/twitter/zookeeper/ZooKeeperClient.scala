@@ -18,7 +18,8 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
   @volatile private var zk: ZooKeeper = null
   connect()
 
-  @volatile private var disconnected = false
+  @volatile private var disconnected = true
+  @volatile private var newSession = true
 
   def this(servers: String, sessionTimeout: Int, basePath: String) =
     this(servers, sessionTimeout, basePath, None)
@@ -62,7 +63,10 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
       case KeeperState.SyncConnected ⇒ {
         disconnected = false
         try {
-          watcher.map(fn ⇒ fn(this))
+          if (newSession) {
+            watcher.map(fn ⇒ fn(this))
+            newSession = false
+          }
         } catch {
           case e: Exception ⇒
             log.error("Exception during zookeeper connection established callback", e)
@@ -71,6 +75,8 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
       }
       case KeeperState.Expired ⇒ {
         // Session was expired; create a new zookeeper connection
+        newSession = true
+        disconnected = true
         connect()
       }
       case _ ⇒ // Disconnected -- zookeeper library will handle reconnects
