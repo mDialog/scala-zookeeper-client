@@ -16,10 +16,9 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
     watcher: Option[ZooKeeperClient ⇒ Unit]) {
   private val log = LoggerFactory.getLogger(this.getClass)
   @volatile private var zk: ZooKeeper = null
+  @volatile private var disconnected: Boolean = true
+  @volatile private var newSession: Boolean = true
   connect()
-
-  @volatile private var disconnected = true
-  @volatile private var newSession = true
 
   def this(servers: String, sessionTimeout: Int, basePath: String) =
     this(servers, sessionTimeout, basePath, None)
@@ -45,6 +44,8 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
       zk.close()
       zk = null
     }
+    newSession = true
+
     zk = new ZooKeeper(servers, sessionTimeout,
       new Watcher {
         def process(event: WatchedEvent) {
@@ -75,7 +76,6 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
       }
       case KeeperState.Expired ⇒ {
         // Session was expired; create a new zookeeper connection
-        newSession = true
         disconnected = true
         connect()
       }
