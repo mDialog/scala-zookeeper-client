@@ -13,7 +13,8 @@ import java.util.concurrent.{ CountDownLatch, TimeUnit }
 import java.util.concurrent.atomic.AtomicBoolean
 
 class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
-    watcher: Option[ZooKeeperClient ⇒ Unit]) {
+    uponNewSession: Option[ZooKeeperClient ⇒ Unit],
+    uponSessionExpiry: Option[ZooKeeperClient ⇒ Unit]) {
   private val log = LoggerFactory.getLogger(this.getClass)
   @volatile private var zk: ZooKeeper = null
   @volatile private var disconnected: Boolean = true
@@ -21,16 +22,22 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
   connect()
 
   def this(servers: String, sessionTimeout: Int, basePath: String) =
-    this(servers, sessionTimeout, basePath, None)
+    this(servers, sessionTimeout, basePath, None, None)
 
-  def this(servers: String, sessionTimeout: Int, basePath: String, watcher: ZooKeeperClient ⇒ Unit) =
-    this(servers, sessionTimeout, basePath, Some(watcher))
+  def this(servers: String, sessionTimeout: Int, basePath: String, uponNewSession: ZooKeeperClient ⇒ Unit) =
+    this(servers, sessionTimeout, basePath, Some(uponNewSession), None)
+
+  def this(servers: String, sessionTimeout: Int, basePath: String, uponNewSession: ZooKeeperClient ⇒ Unit, uponSessionExpiry: ZooKeeperClient ⇒ Unit) =
+    this(servers, sessionTimeout, basePath, Some(uponNewSession), Some(uponSessionExpiry))
 
   def this(servers: String) =
-    this(servers, 3000, "", None)
+    this(servers, 3000, "", None, None)
 
-  def this(servers: String, watcher: ZooKeeperClient ⇒ Unit) =
-    this(servers, 3000, "", Some(watcher))
+  def this(servers: String, uponNewSession: ZooKeeperClient ⇒ Unit) =
+    this(servers, 3000, "", Some(uponNewSession), None)
+
+  def this(servers: String, uponNewSession: ZooKeeperClient ⇒ Unit, uponSessionExpiry: ZooKeeperClient ⇒ Unit) =
+    this(servers, 3000, "", Some(uponNewSession), Some(uponSessionExpiry))
 
   def getHandle(): ZooKeeper = zk
 
@@ -65,7 +72,7 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
         disconnected = false
         try {
           if (newSession) {
-            watcher.map(fn ⇒ fn(this))
+            uponNewSession.map(fn ⇒ fn(this))
             newSession = false
           }
         } catch {
@@ -77,6 +84,7 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
       case KeeperState.Expired ⇒ {
         // Session was expired; create a new zookeeper connection
         disconnected = true
+        uponSessionExpiry.map(fn ⇒ fn(this))
         connect()
       }
       case _ ⇒ // Disconnected -- zookeeper library will handle reconnects
@@ -196,6 +204,7 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
           addedWatch = true
         } catch {
           case e: KeeperException ⇒
+            log.warn("Failed to add watch on {}, retrying in a bit", path)
             Thread.sleep(100)
         }
       }
