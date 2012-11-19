@@ -205,7 +205,7 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
         } catch {
           case e: KeeperException ⇒
             log.warn("Failed to add watch on {}, retrying in a bit", path)
-            Thread.sleep(100)
+            Thread.sleep(300)
         }
       }
 
