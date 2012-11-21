@@ -131,7 +131,11 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
     for (path ← subPaths(makeNodePath(path), '/')) {
       try {
         log.debug("Creating path in createPath: {}", path)
-        zk.create(path, null, Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
+        if (isAlive) {
+          zk.create(path, null, Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
+        } else {
+          log.warn("Attempting to createPath while ZooKeeperClient not connected")
+        }
       } catch {
         case _: KeeperException.NodeExistsException ⇒ {} // ignore existing nodes
       }
