@@ -85,7 +85,7 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
         // Session was expired; create a new zookeeper connection
         disconnected = true
         uponSessionExpiry.map(fn ⇒ fn(this))
-        connect()
+        //connect() - Do not reconnect with this zookeeper client object. It isn't doing anything useful anyway.
       }
       case _ ⇒ // Disconnected -- zookeeper library will handle reconnects
         disconnected = true
