@@ -70,14 +70,9 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
     event.getState match {
       case KeeperState.SyncConnected ⇒ {
         disconnected = false
-        try {
-          if (newSession) {
-            uponNewSession.map(fn ⇒ fn(this))
-            newSession = false
-          }
-        } catch {
-          case e: Exception ⇒
-            log.error("Exception during zookeeper connection established callback", e)
+        if (newSession) {
+          uponNewSession.map(fn ⇒ fn(this))
+          newSession = false
         }
         connectionLatch.countDown()
       }
@@ -131,11 +126,7 @@ class ZooKeeperClient(servers: String, sessionTimeout: Int, basePath: String,
     for (path ← subPaths(makeNodePath(path), '/')) {
       try {
         log.debug("Creating path in createPath: {}", path)
-        if (isAlive) {
-          zk.create(path, null, Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
-        } else {
-          log.warn("Attempting to createPath while ZooKeeperClient not connected")
-        }
+        zk.create(path, null, Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
       } catch {
         case _: KeeperException.NodeExistsException ⇒ {} // ignore existing nodes
       }
